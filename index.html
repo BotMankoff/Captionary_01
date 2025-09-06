@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Captionary - Mobile Edition</title>
+  <style>
+    * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Arial', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    h1 {
+      color: white;
+      margin-bottom: 8px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+      font-size: 1.2em;
+      text-align: center;
+    }
+
+    .game-container { 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      gap: 8px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    /* Cube container optimized for 2x3 grid */
+    .cube-container { 
+      perspective: 1000px; 
+      width: 100%;
+      max-width: 380px;
+      height: 480px;
+      position: relative;
+      margin: 0 auto;
+    }
+
+    .cube {
+      width: 100%; 
+      height: 100%; 
+      position: absolute;
+      transform-style: preserve-3d;
+      transition: transform 0.6s;
+      transform: translateZ(-240px);
+    }
+
+    .cube-face {
+      position: absolute; 
+      width: 100%;
+      height: 480px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      background: white;
+      border-radius: 10px;
+      padding: 6px;
+      backface-visibility: hidden;
+      opacity: 0.95;
+    }
+
+    .cube-face.active {
+      border: 3px solid gold;
+      box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+    }
+
+    /* Fixed transforms for proper face positioning */
+    .cube-face.front  { transform: rotateY(0deg) translateZ(190px); }
+    .cube-face.back   { transform: rotateY(180deg) translateZ(190px); }
+    .cube-face.right  { transform: rotateY(90deg) translateZ(190px); }
+    .cube-face.left   { transform: rotateY(-90deg) translateZ(190px); }
+    .cube-face.top    { transform: rotateX(90deg) translateZ(240px); }
+    .cube-face.bottom { transform: rotateX(-90deg) translateZ(240px); }
+
+    /* 2x3 grid layout */
+    .face-content {
+      width: 100%; 
+      height: 100%;
+      display: grid; 
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: repeat(3, 1fr);
+      gap: 4px;
+    }
+
+    /* Cartoon boxes optimized for 2x3 */
+    .cartoon-box {
+      border: 2px solid #ddd;
+      border-radius: 5px;
+      background: white;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+      padding: 3px;
+    }
+
+    .cartoon-box.correct {
+      border-color: #4CAF50;
+      background: #4CAF50;
+    }
+    
+    .cartoon-box.correct .cartoon-image {
+      background: white;
+    }
+    
+    .cartoon-box.correct .cartoon-caption {
+      background: #4CAF50;
+      color: white;
+      font-weight: bold;
+    }
+
+    /* Image area - 70% of box with better vertical centering */
+    .cartoon-image {
+      height: 70%;
+      background: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.3s ease;
+      margin-top: 5px;
+    }
+
+    /* Image enlargement styles */
+    .cartoon-image.enlarged {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1000;
+      width: 85vw;
+      max-width: 350px;
+      height: 85vw;
+      max-height: 350px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      border-radius: 10px;
+      background: white;
+      padding: 10px;
+    }
+
+    .cartoon-image img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    .image-placeholder {
+      text-align: center;
+      color: #666;
+      font-size: 9px;
+      padding: 3px;
+    }
+
+    /* Caption area - 30% of box, closer to bottom */
+    .cartoon-caption {
+      height: 30%;
+      padding: 2px 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-size: 8px;
+      line-height: 1.1;
+      background: #f8f9fa;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      word-wrap: break-word;
+      margin-bottom: 2px;
+    }
+
+    .cartoon-caption.selectable {
+      cursor: pointer;
+    }
+
+    .cartoon-caption.selected {
+      background: #2196F3;
+      color: white;
+      font-weight: bold;
+    }
+
+    /* Backdrop for enlarged images */
+    .image-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.3);
+      display: none;
+      z-index: 999;
+    }
+    
+    .image-backdrop.show {
+      display: block;
+    }
+
+    /* Compact info bar */
+    .info-bar {
+      background: white;
+      border-radius: 10px;
+      padding: 8px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    }
+
+    .info-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .face-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .face-name {
+      font-weight: bold;
+      color: #764ba2;
+      font-size: 12px;
+    }
+
+    .face-dots {
+      display: flex;
+      gap: 3px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #ddd;
+    }
+
+    .dot.active {
+      background: #764ba2;
+    }
+
+    .stats {
+      display: flex;
+      gap: 10px;
+      font-size: 10px;
+    }
+
+    .stat-item {
+      color: #666;
+    }
+
+    .stat-value {
+      color: #2196F3;
+      font-weight: bold;
+    }
+
+    /* Compact button layout */
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+    }
+
+    .btn {
+      padding: 7px 8px;
+      border: none;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      text-transform: uppercase;
+      color: white;
+      transition: transform 0.1s;
+    }
+
+    .btn:active {
+      transform: scale(0.95);
+    }
+
+    .btn-start { 
+      background: linear-gradient(135deg, #667eea, #764ba2); 
+      grid-column: span 3;
+    }
+    .btn-rotate { background: #607d8b; }
+    .btn-help-inline { background: #2196F3; }
+    .btn-new { background: #9c27b0; }
+
+    /* Win overlay */
+    .win-overlay {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      background: white;
+      padding: 20px;
+      border-radius: 15px;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      z-index: 1000;
+      transition: transform 0.3s;
+    }
+
+    .win-overlay.show {
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .win-message {
+      font-size: 20px;
+      color: #4CAF50;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+
+    /* Help modal */
+    .help-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 20px;
+    }
+
+    .help-modal.show {
+      display: flex;
+    }
+
+    .help-content {
+      background: white;
+      border-radius: 15px;
+      padding: 20px;
+      max-width: 350px;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+
+    .help-title {
+      color: #764ba2;
+      margin-bottom: 15px;
+      font-size: 20px;
+      text-align: center;
+    }
+
+    .help-section {
+      margin-bottom: 15px;
+    }
+
+    .help-section h3 {
+      color: #667eea;
+      font-size: 14px;
+      margin-bottom: 5px;
+    }
+
+    .help-section p {
+      font-size: 12px;
+      line-height: 1.4;
+      color: #333;
+    }
+
+    .close-help {
+      float: right;
+      font-size: 24px;
+      background: none;
+      border: none;
+      color: #999;
+      cursor: pointer;
+    }
+
+    .btn-help {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #2196F3;
+      color: white;
+      border: none;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      z-index: 100;
+    }
+
+    /* Mode badge */
+    .mode-badge {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      background: rgba(255,255,255,0.9);
+      padding: 2px 6px;
+      border-radius: 8px;
+      font-size: 9px;
+      font-weight: bold;
+      color: #764ba2;
+      display: none;
+      z-index: 10;
+    }
+
+    .cube-face.active .mode-badge {
+      display: block;
+    }
+
+    /* Adjust for smaller screens */
+    @media (max-height: 700px) {
+      .cube-container {
+        height: 420px;
+      }
+      .cube-face {
+        height: 420px;
+      }
+      h1 {
+        font-size: 1.1em;
+        margin-bottom: 5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Captionary</h1>
+
+  <button class="btn-help" onclick="toggleHelp()">?</button>
+
+  <div class="help-modal" id="helpModal">
+    <div class="help-content">
+      <button class="close-help" onclick="toggleHelp()">×</button>
+      <h2 class="help-title">How to Play</h2>
+      <div class="help-section">
+        <p><strong>Quick Start:</strong> Tap START, then swap captions until each matches its cartoon. Green = correct!</p>
+        <p style="margin-top: 10px;"><strong>Tips:</strong><br>
+        • Tap cartoon to enlarge<br>
+        • ROTATE changes face<br>
+        • NEW resets all faces<br>
+        • 6 faces, 6 puzzles each</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="game-container">
+    <div class="cube-container">
+      <div class="cube" id="cube">
+        <div class="cube-face front" data-face="0">
+          <div class="mode-badge">PLAYING</div>
+          <div class="face-content" data-face-content="0"></div>
+        </div>
+        <div class="cube-face back" data-face="1">
+          <div class="mode-badge">PLAYING</div>
+          <div class="face-content" data-face-content="1"></div>
+        </div>
+        <div class="cube-face right" data-face="2">
+          <div class="mode-badge">PLAYING</div>
+          <div class="face-content" data-face-content="2"></div>
+        </div>
+        <div class="cube-face left" data-face="3">
+          <div class="mode-badge">PLAYING</div>
+          <div class="face-content" data-face-content="3"></div>
+        </div>
+        <div class="cube-face top" data-face="4">
+          <div class="mode-badge">PLAYING</div>
+          <div class="face-content" data-face-content="4"></div>
+        </div>
+        <div class="cube-face bottom" data-face="5">
+          <div class="mode-badge">PLAYING</div>
+          <div class="face-content" data-face-content="5"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-bar">
+      <div class="info-top">
+        <div class="face-indicator">
+          <div class="face-name" id="faceName">Front</div>
+          <div class="face-dots">
+            <div class="dot active"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+          </div>
+        </div>
+        <div class="stats">
+          <span class="stat-item">Time: <span class="stat-value" id="timer">0s</span></span>
+          <span class="stat-item">Swaps: <span class="stat-value" id="swaps">0</span></span>
+        </div>
+      </div>
+      <div class="buttons">
+        <button class="btn btn-start" onclick="togglePlay()" id="startBtn">Start Game</button>
+        <button class="btn btn-rotate" onclick="rotateCube()">Rotate</button>
+        <button class="btn btn-help-inline" onclick="toggleHelp()">How to Play</button>
+        <button class="btn btn-new" onclick="newGame()">New</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="win-overlay" id="winOverlay">
+    <div class="win-message">🎉 Face Complete!</div>
+    <div id="winStats"></div>
+  </div>
+
+  <script>
+    // Caption data
+    const captionData = {
+      "CC124127": [`"You're a good listener."`],
+      "AM901177": [`"So besides opera and lurking, what do you do to relax?"`],
+      "CC141740": [`"They're doing inspections-get the throw pillows in order."`],
+      "CC144176": [`"Under your plan, the cute dogs do the surgery and the robots comfort you in the recovery room."`],
+      "CC140853": [`"This place was better before they tore it down."`],
+      "CC134644": [`"It's improv night."`],
+      "CX300341": [`"Whatever you do, keep up with your mortgage payments."`],
+      "CC136084": [`"I had a productive week."`],
+      "CC144374": [`"Take heed! For your journey is filled with long delays and unexpected service charges!"`],
+      "CX917602": [`"In the heart of battle, as you stare down death! That is how sausage is made!"`],
+      "CC140728": [`"There's always one annoying piece left over."`],
+      "AM901215": [`"We still get crows, but at least he's keeping the other crime families out of the corn."`],
+      "CC28353": [`"Fusilli, you crazy bastard! How are you?"`],
+      "AM600260": [`"This is Miami, we'll let the rising sea level do the rest."`],
+      "CC142498": [`"Cherish this moment, because clearly our parents are getting a divorce."`],
+      "CC131310": [`"He has no distinguishing features,really, but you can't miss him."`],
+      "CC902832": [`"You're carrying a lot of tension."`],
+      "CC137952": [`"Yes, the planet got destroyed. But for a beautiful moment in time we created a lot of value for shareholders."`],
+      "CC144765": [`"It's alive! It's nearly impossible to tell the difference, but it's alive!"`],
+      "CC143778": [`"We Tell No One"`],
+      "AM900308": [`"You probably don't need to specify 'toga party'."`],
+      "CC132383": [`"Well, just look at you - that's why I'm king."`],
+      "CX400084": [`"Hey, dump that in the East River where it belongs."`],
+      "CX917603": [`"It's a simple arrangement. You get us on a plane, and we provide you with 'support.'"`],
+      "CC120750": [`"I see you brought the pie charts."`],
+      "CC139201": [`"You can get good cards but still have terrible luck."`],
+      "CC134719": [`"See? It never hurts to ask."`],
+      "CC903132": [`"And in this corner is a wasp, so we're going to stay away from it."`],
+      "CC30333": [`"Just go home and change, Worthington, and spare me any more talk about postmodernism."`],
+      "CC903654": [`"Can you roll it back for nine more minutes?"`],
+      "CC30455": [`"My platform can be summarized in a single word: Leadership!"`],
+      "CX910024": [`"Notice how the artist uses light to draw in the viewer."`],
+      "CC131098": [`"She was a sweet old lady whose kids never called."`],
+      "CC23398": [`"You're doing a good job, Davis, but it's come to my attention that you're a fugitive from a chain gang."`],
+      "CC903330": [`"Did you remember to back up the last 4.5 billion years?"`],
+      "CC141033": [`"How does this make you feel?"`],
+      "CC141796": [`"They all lead back to this ball of yarn."`],
+      "CC39856": [`"Hey, everybody, we're invited to a cookout!"`],
+      "CC139149": [`"Remember, they're just as afraid of you as you are of standing up to your mother."`],
+      "CC135997": [`"This moor got a great Yelp review."`],
+      "CC138519": [`"Good shootin', son. I'm pretty sure that was a squirrel."`],
+      "CC123844": [`"I'm on sabbatical."`],
+      "CC143381": [`"Perhaps it will surprise you to learn the following—you've been beaten by your very own wife!"`],
+      "CX908696": [`"I'm honored to share my research at your virtual academic conference."`],
+      "CC122743": [`"Mommy wants you to know where your food comes from."`],
+      "CC903130": [`"Do we have any candy?"`],
+      "CC31985": [`"They grilled me, Eddie, but I didn't talk."`],
+      "CC125602": [`"Do you mind?"`],
+      "CC144565": [`"I won't lie to you. Chopin's Funeral March is a bad sign."`],
+      "CC121666": [`"No wonder we could get tickets."`],
+      "CC143961": [`"The basic building blocks of life are identical in all species."`],
+      "AB103161": [`"Are you ever going to take up horse racing again?"`],
+      "CC145479": [`"Hey, remember a few days ago, when all this was unacceptable?"`],
+      "CS178286": [`"You can tell it's a period drama because they're not wearing ozone helmets."`]
+    };
+    
+    const allowedContestNumbers = [
+      "CC124127", "AM901177", "CC141740", "CC144176", "CC140853", "CC134644", "CX300341", "CC136084", "CC144374", "CX917602",
+      "CC140728", "AM901215", "CC28353", "AM600260", "CC142498", "CC131310", "CC902832", "CC137952", "CC144765", "CC143778",
+      "AM900308", "CC132383", "CX400084", "CX917603", "CC120750", "CC139201", "CC134719", "CC903132", "CC30333", "CC903654",
+      "CC30455", "CX910024", "CC131098", "CC23398", "CC903330", "CC141033", "CC141796", "CC39856", "CC139149", "CC135997",
+      "CC138519", "CC123844", "CC143381", "CX908696", "CC122743", "CC903130", "CC31985", "CC125602", "CC144565", "CC121666",
+      "CC143961", "AB103161", "CC145479", "CS178286"
+    ];
+
+    // Build metadata
+    const cartoonMetadata = [];
+    const contestNumbers = allowedContestNumbers.filter(n => String(n) in captionData);
+    contestNumbers.forEach((contestNum, index) => {
+      cartoonMetadata.push({ 
+        id: index + 1, 
+        contestNumber: contestNum, 
+        imageFile: `${contestNum}.jpg` 
+      });
+    });
+
+    // Game state
+    let currentFace = 0;
+    let isPlaying = false;
+    let puzzles = [];
+    let selectedCaption = null;
+    let swapCount = 0;
+    let seconds = 0;
+    let timerInterval = null;
+    let recentlyUsedCartoons = [];
+
+    const faceNames = ['Front', 'Back', 'Right', 'Left', 'Top', 'Bottom'];
+
+    // Create backdrop element for image enlargement
+    const backdrop = document.createElement('div');
+    backdrop.className = 'image-backdrop';
+    document.body.appendChild(backdrop);
+    
+    // Handle image enlargement
+    function handleImageClick(e) {
+      e.stopPropagation();
+      const imageDiv = e.currentTarget;
+      
+      // Remove enlarged class from any other images
+      document.querySelectorAll('.cartoon-image.enlarged').forEach(img => {
+        if (img !== imageDiv) {
+          img.classList.remove('enlarged');
+        }
+      });
+      
+      // Toggle enlarged class on clicked image
+      imageDiv.classList.toggle('enlarged');
+      
+      // Toggle backdrop
+      if (imageDiv.classList.contains('enlarged')) {
+        backdrop.classList.add('show');
+      } else {
+        backdrop.classList.remove('show');
+      }
+    }
+    
+    // Close enlarged image when clicking backdrop
+    backdrop.addEventListener('click', () => {
+      document.querySelectorAll('.cartoon-image.enlarged').forEach(img => {
+        img.classList.remove('enlarged');
+      });
+      backdrop.classList.remove('show');
+    });
+
+    // Utility functions
+    function shuffle(arr) {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    }
+
+    function derange(arr) {
+      const result = [...arr];
+      const n = result.length;
+      
+      for (let i = n - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+      }
+      
+      for (let i = 0; i < n; i++) {
+        if (result[i] === arr[i]) {
+          const swapIdx = (i + 1) % n;
+          [result[i], result[swapIdx]] = [result[swapIdx], result[i]];
+        }
+      }
+      
+      return result;
+    }
+
+    function generatePuzzle() {
+      // Filter out recently used cartoons
+      const availableCartoons = cartoonMetadata.filter(
+        c => !recentlyUsedCartoons.includes(c.contestNumber)
+      );
+      
+      const cartoonsToUse = availableCartoons.length >= 6 ? availableCartoons : cartoonMetadata;
+      const selected = shuffle(cartoonsToUse).slice(0, 6);
+      
+      // Update recently used list
+      selected.forEach(cartoon => {
+        if (!recentlyUsedCartoons.includes(cartoon.contestNumber)) {
+          recentlyUsedCartoons.push(cartoon.contestNumber);
+        }
+      });
+      
+      // Keep only last 36 used (all faces)
+      if (recentlyUsedCartoons.length > 36) {
+        recentlyUsedCartoons = recentlyUsedCartoons.slice(-36);
+      }
+      
+      const puzzle = selected.map(cartoon => {
+        const options = captionData[cartoon.contestNumber] || ["Missing caption"];
+        const correctCaption = options[Math.floor(Math.random() * options.length)];
+        
+        return {
+          id: cartoon.id,
+          contestNumber: cartoon.contestNumber,
+          imageFile: cartoon.imageFile,
+          correctCaption: correctCaption,
+          currentCaption: ""
+        };
+      });
+      
+      const correctCaptions = puzzle.map(p => p.correctCaption);
+      const derangedCaptions = derange(correctCaptions);
+      puzzle.forEach((p, i) => {
+        p.currentCaption = derangedCaptions[i];
+      });
+      
+      return puzzle;
+    }
+
+    function renderFace(faceIndex) {
+      const content = document.querySelector(`[data-face-content="${faceIndex}"]`);
+      if (!content) return;
+      
+      content.innerHTML = '';
+      const puzzle = puzzles[faceIndex];
+      
+      puzzle.forEach((item, index) => {
+        const box = document.createElement('div');
+        box.className = 'cartoon-box';
+        if (item.currentCaption === item.correctCaption) {
+          box.classList.add('correct');
+        }
+        
+        const imageDiv = document.createElement('div');
+        imageDiv.className = 'cartoon-image';
+        imageDiv.addEventListener('click', handleImageClick);
+        
+        const img = document.createElement('img');
+        img.alt = `Cartoon image`;
+        img.src = `./${item.imageFile}`;
+        
+        const placeholder = document.createElement('div');
+        placeholder.className = 'image-placeholder';
+        placeholder.innerHTML = `<div>Loading...</div>`;
+        
+        imageDiv.appendChild(placeholder);
+        imageDiv.appendChild(img);
+        
+        img.onload = function() {
+          const placeholder = imageDiv.querySelector('.image-placeholder');
+          if (placeholder) {
+            placeholder.remove();
+          }
+        };
+        
+        img.onerror = function() {
+          const placeholder = imageDiv.querySelector('.image-placeholder');
+          if (placeholder) {
+            placeholder.innerHTML = `<div style="font-size: 8px; color: #888;">Image not found</div>`;
+          }
+        };
+        
+        const captionDiv = document.createElement('div');
+        captionDiv.className = 'cartoon-caption';
+        if (isPlaying && faceIndex === currentFace) {
+          captionDiv.classList.add('selectable');
+        }
+        captionDiv.setAttribute('data-face', faceIndex);
+        captionDiv.setAttribute('data-index', index);
+        captionDiv.textContent = item.currentCaption;
+        captionDiv.addEventListener('click', handleCaptionClick);
+        
+        box.appendChild(imageDiv);
+        box.appendChild(captionDiv);
+        content.appendChild(box);
+      });
+    }
+
+    function handleCaptionClick(e) {
+      if (!isPlaying) return;
+      
+      const el = e.target;
+      const face = parseInt(el.dataset.face);
+      const index = parseInt(el.dataset.index);
+      
+      if (face !== currentFace) return;
+      
+      if (!selectedCaption) {
+        selectedCaption = { el, face, index };
+        el.classList.add('selected');
+      } else if (selectedCaption.el === el) {
+        el.classList.remove('selected');
+        selectedCaption = null;
+      } else {
+        // Swap
+        const puzzle = puzzles[currentFace];
+        const temp = puzzle[selectedCaption.index].currentCaption;
+        puzzle[selectedCaption.index].currentCaption = puzzle[index].currentCaption;
+        puzzle[index].currentCaption = temp;
+        
+        swapCount++;
+        document.getElementById('swaps').textContent = swapCount;
+        
+        selectedCaption.el.classList.remove('selected');
+        selectedCaption = null;
+        
+        renderFace(currentFace);
+        checkWin();
+      }
+    }
+
+    function rotateCube() {
+      if (selectedCaption) {
+        selectedCaption.el.classList.remove('selected');
+        selectedCaption = null;
+      }
+      
+      // Close any enlarged images when rotating
+      document.querySelectorAll('.cartoon-image.enlarged').forEach(img => {
+        img.classList.remove('enlarged');
+      });
+      backdrop.classList.remove('show');
+      
+      // Simple rotation to next face
+      currentFace = (currentFace + 1) % 6;
+      
+      const cube = document.getElementById('cube');
+      const rotations = [
+        [0, 0],      // front
+        [0, 180],    // back
+        [0, -90],    // right
+        [0, 90],     // left
+        [-90, 0],    // top
+        [90, 0]      // bottom
+      ];
+      
+      const [x, y] = rotations[currentFace];
+      cube.style.transform = `translateZ(-240px) rotateX(${x}deg) rotateY(${y}deg)`;
+      
+      document.getElementById('faceName').textContent = faceNames[currentFace];
+      
+      // Update dots
+      document.querySelectorAll('.dot').forEach((dot, i) => {
+        dot.classList.toggle('active', i === currentFace);
+      });
+      
+      if (isPlaying) {
+        document.querySelectorAll('.cube-face').forEach(f => f.classList.remove('active'));
+        document.querySelectorAll('.cube-face')[currentFace].classList.add('active');
+      }
+      
+      renderFace(currentFace);
+    }
+
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      const btn = document.getElementById('startBtn');
+      
+      if (isPlaying) {
+        btn.textContent = 'Stop';
+        swapCount = 0;
+        seconds = 0;
+        document.getElementById('swaps').textContent = '0';
+        document.getElementById('timer').textContent = '0s';
+        
+        document.querySelectorAll('.cube-face').forEach(f => f.classList.remove('active'));
+        document.querySelectorAll('.cube-face')[currentFace].classList.add('active');
+        
+        timerInterval = setInterval(() => {
+          seconds++;
+          document.getElementById('timer').textContent = seconds + 's';
+        }, 1000);
+      } else {
+        btn.textContent = 'Start Game';
+        document.querySelectorAll('.cube-face').forEach(f => f.classList.remove('active'));
+        clearInterval(timerInterval);
+      }
+      
+      renderFace(currentFace);
+    }
+
+    function checkWin() {
+      const puzzle = puzzles[currentFace];
+      if (puzzle.every(p => p.currentCaption === p.correctCaption)) {
+        clearInterval(timerInterval);
+        document.getElementById('winStats').textContent = `Time: ${seconds}s | Swaps: ${swapCount}`;
+        document.getElementById('winOverlay').classList.add('show');
+        setTimeout(() => {
+          document.getElementById('winOverlay').classList.remove('show');
+        }, 3000);
+        if (isPlaying) togglePlay();
+      }
+    }
+
+    function newGame() {
+      if (isPlaying) togglePlay();
+      puzzles = [];
+      recentlyUsedCartoons = [];
+      for (let i = 0; i < 6; i++) {
+        puzzles.push(generatePuzzle());
+        renderFace(i);
+      }
+      currentFace = 0;
+      const cube = document.getElementById('cube');
+      cube.style.transform = `translateZ(-240px) rotateX(0deg) rotateY(0deg)`;
+      document.getElementById('faceName').textContent = faceNames[0];
+      
+      // Reset dots
+      document.querySelectorAll('.dot').forEach((dot, i) => {
+        dot.classList.toggle('active', i === 0);
+      });
+    }
+
+    function toggleHelp() {
+      document.getElementById('helpModal').classList.toggle('show');
+    }
+
+    // Initialize
+    newGame();
+  </script>
+</body>
+</html>
